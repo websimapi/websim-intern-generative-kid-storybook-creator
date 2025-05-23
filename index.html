@@ -390,7 +390,7 @@
             totalPages: 0
         };
 
-        let currentSpread = 0; 
+        let currentPageIndex = 0; 
         let bookOpened = false;
         let isAnimating = false;
 
@@ -543,7 +543,7 @@
 
             storybookDiv.innerHTML = html;
             generateBookPages();
-            currentSpread = 0;
+            currentPageIndex = 0;
             bookOpened = false;
             updateNavigation();
         }
@@ -552,39 +552,44 @@
             const bookPages = document.getElementById('bookPages');
             let pagesHtml = '';
 
-            // Calculate how many spreads we need
-            const totalSpreads = Math.ceil(storyData.pages.length / 2);
-
-            for (let spreadIndex = 0; spreadIndex < totalSpreads; spreadIndex++) {
-                const leftPageIndex = spreadIndex * 2;
-                const rightPageIndex = leftPageIndex + 1;
+            // Create individual page spreads - each page gets its own spread with text on left and image on right
+            for (let i = 0; i < storyData.pages.length; i++) {
+                const page = storyData.pages[i];
                 
-                const leftPage = storyData.pages[leftPageIndex];
-                const rightPage = storyData.pages[rightPageIndex];
-
                 pagesHtml += `
-                    <div class="page-spread" id="spread-${spreadIndex}" style="display: none;">
+                    <div class="page-spread" id="page-${i}" style="display: none;">
                         <div class="page left text-page">
-                            <div class="page-text">${leftPage.text}</div>
-                            <div class="page-number">${leftPage.pageNumber}</div>
+                            <div class="page-text">${page.text}</div>
+                            <div class="page-number">${page.pageNumber}</div>
                         </div>
-                        ${rightPage ? `
-                            <div class="page right image-page" id="right-page-${spreadIndex}">
-                                <div class="page-image">
-                                    <img src="${rightPage.imageUrl}" alt="Illustration for page ${rightPage.pageNumber}" loading="lazy">
-                                </div>
-                                <div class="page-number">${rightPage.pageNumber}</div>
+                        <div class="page right image-page" id="right-page-${i}">
+                            <div class="page-image">
+                                <img src="${page.imageUrl}" alt="Illustration for page ${page.pageNumber}" loading="lazy">
                             </div>
-                        ` : `
-                            <div class="page right" id="right-page-${spreadIndex}">
-                                <div style="display: flex; align-items: center; justify-content: center; height: 100%; font-size: 2em; color: #6366f1;">
-                                    The End 🌟
-                                </div>
-                            </div>
-                        `}
+                        </div>
                     </div>
                 `;
             }
+
+            // Add a final "The End" page
+            pagesHtml += `
+                <div class="page-spread" id="page-${storyData.pages.length}" style="display: none;">
+                    <div class="page left">
+                        <div style="display: flex; align-items: center; justify-content: center; height: 100%; font-size: 2.5em; color: #6366f1; text-align: center;">
+                            <div>
+                                <div>🌟</div>
+                                <div style="margin-top: 20px;">The End</div>
+                                <div style="font-size: 0.4em; margin-top: 15px; color: #8b5cf6;">Thank you for reading!</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="page right">
+                        <div style="display: flex; align-items: center; justify-content: center; height: 100%; font-size: 4em;">
+                            📚✨
+                        </div>
+                    </div>
+                </div>
+            `;
 
             bookPages.innerHTML = pagesHtml;
         }
@@ -594,7 +599,7 @@
                 document.querySelector('.book-cover').classList.add('opened');
                 document.querySelector('.book-pages').classList.add('active');
                 setTimeout(() => {
-                    showSpread(0);
+                    showPage(0);
                 }, 300);
                 bookOpened = true;
                 updateNavigation();
@@ -605,53 +610,54 @@
             document.querySelector('.book-cover').classList.remove('opened');
             document.querySelector('.book-pages').classList.remove('active');
             
-            // Hide all spreads
-            const totalSpreads = Math.ceil(storyData.pages.length / 2);
-            for (let i = 0; i < totalSpreads; i++) {
-                const spread = document.getElementById(`spread-${i}`);
-                if (spread) spread.style.display = 'none';
+            // Hide all pages
+            const totalPages = storyData.pages.length + 1; // +1 for "The End" page
+            for (let i = 0; i < totalPages; i++) {
+                const page = document.getElementById(`page-${i}`);
+                if (page) page.style.display = 'none';
             }
             
             bookOpened = false;
+            currentPageIndex = 0;
             updateNavigation();
         }
 
-        function showSpread(spreadIndex) {
-            const totalSpreads = Math.ceil(storyData.pages.length / 2);
+        function showPage(pageIndex) {
+            const totalPages = storyData.pages.length + 1; // +1 for "The End" page
             
-            // Hide all spreads
-            for (let i = 0; i < totalSpreads; i++) {
-                const spread = document.getElementById(`spread-${i}`);
-                if (spread) spread.style.display = 'none';
+            // Hide all pages
+            for (let i = 0; i < totalPages; i++) {
+                const page = document.getElementById(`page-${i}`);
+                if (page) page.style.display = 'none';
             }
 
-            // Show the current spread
-            if (spreadIndex >= 0 && spreadIndex < totalSpreads) {
-                const spread = document.getElementById(`spread-${spreadIndex}`);
-                if (spread) {
-                    spread.style.display = 'flex';
+            // Show the current page
+            if (pageIndex >= 0 && pageIndex < totalPages) {
+                const page = document.getElementById(`page-${pageIndex}`);
+                if (page) {
+                    page.style.display = 'flex';
                 }
             }
 
-            currentSpread = spreadIndex;
+            currentPageIndex = pageIndex;
             updateNavigation();
         }
 
         function nextPage() {
             if (isAnimating) return;
             
-            const totalSpreads = Math.ceil(storyData.pages.length / 2);
-            if (currentSpread < totalSpreads - 1) {
+            const totalPages = storyData.pages.length + 1; // +1 for "The End" page
+            if (currentPageIndex < totalPages - 1) {
                 isAnimating = true;
                 
                 // Get the current right page and animate it turning
-                const currentRightPage = document.getElementById(`right-page-${currentSpread}`);
+                const currentRightPage = document.getElementById(`right-page-${currentPageIndex}`);
                 if (currentRightPage) {
                     currentRightPage.classList.add('turning');
                 }
                 
                 setTimeout(() => {
-                    showSpread(currentSpread + 1);
+                    showPage(currentPageIndex + 1);
                     if (currentRightPage) {
                         currentRightPage.classList.remove('turning');
                     }
@@ -663,13 +669,13 @@
         function previousPage() {
             if (isAnimating) return;
             
-            if (currentSpread > 0) {
+            if (currentPageIndex > 0) {
                 isAnimating = true;
                 
-                // Show the previous spread immediately, then animate the right page back
-                showSpread(currentSpread - 1);
+                // Show the previous page immediately, then animate
+                showPage(currentPageIndex - 1);
                 
-                const newRightPage = document.getElementById(`right-page-${currentSpread}`);
+                const newRightPage = document.getElementById(`right-page-${currentPageIndex}`);
                 if (newRightPage) {
                     newRightPage.classList.add('turning');
                     setTimeout(() => {
@@ -688,19 +694,19 @@
             const closeBtn = document.getElementById('closeBtn');
 
             if (!bookOpened) {
-                prevBtn.style.display = 'none';
-                nextBtn.style.display = 'none';
-                closeBtn.style.display = 'none';
+                if (prevBtn) prevBtn.style.display = 'none';
+                if (nextBtn) nextBtn.style.display = 'none';
+                if (closeBtn) closeBtn.style.display = 'none';
                 return;
             }
 
-            prevBtn.style.display = 'flex';
-            nextBtn.style.display = 'flex';
-            closeBtn.style.display = 'flex';
+            if (prevBtn) prevBtn.style.display = 'flex';
+            if (nextBtn) nextBtn.style.display = 'flex';
+            if (closeBtn) closeBtn.style.display = 'flex';
 
-            const totalSpreads = Math.ceil(storyData.pages.length / 2);
-            prevBtn.disabled = currentSpread <= 0 || isAnimating;
-            nextBtn.disabled = currentSpread >= totalSpreads - 1 || isAnimating;
+            const totalPages = storyData.pages.length + 1; // +1 for "The End" page
+            if (prevBtn) prevBtn.disabled = currentPageIndex <= 0 || isAnimating;
+            if (nextBtn) nextBtn.disabled = currentPageIndex >= totalPages - 1 || isAnimating;
         }
 
         function showError(message) {
@@ -722,7 +728,7 @@
             document.getElementById('pages').value = '5';
             
             // Reset book state
-            currentSpread = 0;
+            currentPageIndex = 0;
             bookOpened = false;
             isAnimating = false;
         }
