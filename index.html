@@ -757,11 +757,13 @@ Keep the description detailed but concise for illustration consistency.`;
                         await new Promise(resolve => setTimeout(resolve, 1000));
                     }
                     
+                    const charactersForPage = await determinePageCharacters(page, i);
+                    
                     let imagePrompt = `Children's book illustration: ${page.text}`;
                     
-                    const pageText = page.text.toLowerCase();
-                    for (const [characterName, characterData] of Object.entries(storyData.characterDescriptions)) {
-                        if (pageText.includes(characterName.toLowerCase())) {
+                    for (const characterName of charactersForPage) {
+                        const characterData = storyData.characterDescriptions[characterName];
+                        if (characterData) {
                             const description = characterData.visualAnalysis || characterData.initialDescription;
                             imagePrompt += ` Character "${characterName}" should look exactly like this: ${description}`;
                         }
@@ -783,6 +785,85 @@ Keep the description detailed but concise for illustration consistency.`;
                 
             } catch (error) {
                 throw new Error(`Story illustration generation failed: ${error.message}`);
+            }
+        }
+
+        async function determinePageCharacters(page, pageIndex) {
+            try {
+                const allCharacterNames = Object.keys(storyData.characterDescriptions);
+                
+                if (allCharacterNames.length === 0) {
+                    return [];
+                }
+                
+                let contextText = page.text;
+                if (pageIndex > 0) {
+                    contextText = storyData.pages[pageIndex - 1].text + ' ' + contextText;
+                }
+                if (pageIndex < storyData.pages.length - 1) {
+                    contextText = contextText + ' ' + storyData.pages[pageIndex + 1].text;
+                }
+                
+                const characterDetectionPrompt = `Based on this page text from a children's story, determine which characters should appear in the illustration for this page.
+
+Page text: "${page.text}"
+Context from nearby pages: "${contextText}"
+
+Available characters: ${allCharacterNames.join(', ')}
+
+Consider:
+- Characters explicitly mentioned in the text
+- Characters who would logically be present in the scene
+- Characters involved in dialogue or actions
+- Main characters who are central to the story
+
+Return ONLY a comma-separated list of character names that should appear in this page's illustration. If no characters should appear, return "none".
+
+Example response: "Luna, Captain Whiskers" or "none"`;
+
+                const completion = await websim.chat.completions.create({
+                    messages: [
+                        {
+                            role: "user",
+                            content: characterDetectionPrompt
+                        }
+                    ]
+                });
+
+                const response = completion.content.trim().toLowerCase();
+                
+                if (response === 'none' || response === '') {
+                    return [];
+                }
+                
+                const suggestedCharacters = response.split(',').map(c => c.trim());
+                const matchedCharacters = [];
+                
+                for (const suggested of suggestedCharacters) {
+                    const match = allCharacterNames.find(actual => 
+                        actual.toLowerCase().includes(suggested) || 
+                        suggested.includes(actual.toLowerCase())
+                    );
+                    if (match) {
+                        matchedCharacters.push(match);
+                    }
+                }
+                
+                return [...new Set(matchedCharacters)];
+                
+            } catch (error) {
+                console.warn(`Failed to determine characters for page ${pageIndex}, falling back to text-based detection:`, error);
+                
+                const pageText = page.text.toLowerCase();
+                const foundCharacters = [];
+                
+                for (const characterName of Object.keys(storyData.characterDescriptions)) {
+                    if (pageText.includes(characterName.toLowerCase())) {
+                        foundCharacters.push(characterName);
+                    }
+                }
+                
+                return foundCharacters;
             }
         }
 
