@@ -798,22 +798,23 @@ Keep the description detailed but concise for illustration consistency.`;
                     characterInfo = characterDescriptions.join('\n');
                 }
 
-                const promptRefinementRequest = `Create a concise but detailed image generation prompt for a children's book illustration. 
+                const promptRefinementRequest = `Create a visual image generation prompt for a children's book illustration. This prompt should contain ONLY visual descriptions, no text or dialogue.
 
-Page text: "${page.text}"
+Based on this page content: "${page.text}"
 Story topic: "${storyData.topic}"
 
 ${characterInfo ? `Characters to include in the scene:\n${characterInfo}` : 'No specific characters for this scene.'}
 
 Requirements:
-- Keep prompt under 150 words
-- Include all specified characters with their key visual details
-- Describe the scene/action from the page text
-- Maintain child-friendly cartoon style
-- Ensure all characters are clearly visible and interacting if applicable
-- Make it vivid and specific for consistent illustration
+- Create a purely visual description of the scene (NO text/dialogue in the prompt)
+- Include all specified characters with their exact visual details
+- Describe the setting, action, and visual elements from the page
+- Keep it under 100 words
+- Make it vivid and specific for children's book illustration
+- Ensure all characters are clearly visible and positioned appropriately
+- Use child-friendly cartoon art style
 
-Return only the refined image prompt, no other text.`;
+Return ONLY the visual image prompt with no story text included.`;
 
                 const completion = await websim.chat.completions.create({
                     messages: [
@@ -828,13 +829,21 @@ Return only the refined image prompt, no other text.`;
                 
             } catch (error) {
                 console.warn('Failed to refine image prompt, using fallback:', error);
-                let fallbackPrompt = `Children's book illustration: ${page.text}. `;
+                let fallbackPrompt = `Children's book illustration showing: `;
                 
                 if (charactersForPage.length > 0) {
-                    fallbackPrompt += `Characters: ${charactersForPage.join(', ')} all visible in scene. `;
+                    const characterVisuals = [];
+                    for (const characterName of charactersForPage) {
+                        const characterData = storyData.characterDescriptions[characterName];
+                        if (characterData) {
+                            const description = characterData.visualAnalysis || characterData.initialDescription;
+                            characterVisuals.push(`${characterName} (${description})`);
+                        }
+                    }
+                    fallbackPrompt += characterVisuals.join(' and ') + ' in scene together. ';
                 }
                 
-                fallbackPrompt += `Bright, colorful cartoon style for children aged 4-8.`;
+                fallbackPrompt += `Bright, colorful cartoon style for children aged 4-8. Visual scene only, no text.`;
                 return fallbackPrompt;
             }
         }
