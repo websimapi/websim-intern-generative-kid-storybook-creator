@@ -110,8 +110,8 @@
 
         .book-container {
             position: relative;
-            width: 800px;
-            height: 600px;
+            width: 900px;
+            height: 650px;
             margin: 0 auto;
             transform-style: preserve-3d;
         }
@@ -146,6 +146,7 @@
             transition: transform 0.6s ease;
             transform-origin: left center;
             backface-visibility: hidden;
+            z-index: 10;
         }
 
         .book-cover.opened {
@@ -166,31 +167,54 @@
             display: block;
         }
 
-        .page-content {
+        .page-spread {
             display: flex;
             height: 100%;
             position: relative;
         }
 
-        .page-left, .page-right {
-            flex: 1;
+        .page {
+            width: 50%;
             padding: 40px;
             display: flex;
             flex-direction: column;
             justify-content: center;
             position: relative;
+            background: #fefefe;
         }
 
-        .page-left {
+        .page.left {
             border-right: 2px solid #e2e8f0;
         }
 
+        .page.right {
+            position: relative;
+            transform-origin: left center;
+            transition: transform 0.8s ease-in-out;
+            transform-style: preserve-3d;
+            backface-visibility: hidden;
+        }
+
+        .page.right.turning {
+            transform: rotateY(-180deg);
+        }
+
+        .page.text-page {
+            justify-content: center;
+            align-items: center;
+        }
+
+        .page.image-page {
+            justify-content: center;
+            align-items: center;
+        }
+
         .page-text {
-            font-size: 20px;
+            font-size: 22px;
             line-height: 1.8;
             color: #374151;
             text-align: center;
-            margin-bottom: 20px;
+            margin: 20px 0;
         }
 
         .page-image {
@@ -202,8 +226,8 @@
         }
 
         .page-image img {
-            max-width: 100%;
-            max-height: 100%;
+            max-width: 95%;
+            max-height: 90%;
             border-radius: 10px;
             box-shadow: 0 3px 15px rgba(0,0,0,0.2);
             object-fit: contain;
@@ -262,16 +286,6 @@
             transform: none;
         }
 
-        .page-turn-animation {
-            animation: pageTurn 0.6s ease-in-out;
-        }
-
-        @keyframes pageTurn {
-            0% { transform: rotateY(0deg); }
-            50% { transform: rotateY(-90deg); }
-            100% { transform: rotateY(0deg); }
-        }
-
         .error {
             color: #ef4444;
             background: #fef2f2;
@@ -294,6 +308,10 @@
             margin-top: 30px;
         }
 
+        .hidden {
+            display: none !important;
+        }
+
         @media (max-width: 768px) {
             .book-container {
                 width: 90vw;
@@ -302,18 +320,8 @@
                 max-height: 450px;
             }
 
-            .page-content {
-                flex-direction: column;
-            }
-
-            .page-left {
-                border-right: none;
-                border-bottom: 2px solid #e2e8f0;
-                flex: 0.4;
-            }
-
-            .page-right {
-                flex: 0.6;
+            .page {
+                padding: 20px;
             }
 
             .page-text {
@@ -382,8 +390,9 @@
             totalPages: 0
         };
 
-        let currentPage = 0;
+        let currentSpread = 0; 
         let bookOpened = false;
+        let isAnimating = false;
 
         async function generateStory() {
             const pages = parseInt(document.getElementById('pages').value);
@@ -533,29 +542,46 @@
             `;
 
             storybookDiv.innerHTML = html;
-            generatePages();
-            currentPage = 0;
+            generateBookPages();
+            currentSpread = 0;
             bookOpened = false;
             updateNavigation();
         }
 
-        function generatePages() {
+        function generateBookPages() {
             const bookPages = document.getElementById('bookPages');
             let pagesHtml = '';
 
-            for (let i = 0; i < storyData.pages.length; i++) {
-                const page = storyData.pages[i];
+            // Calculate how many spreads we need
+            const totalSpreads = Math.ceil(storyData.pages.length / 2);
+
+            for (let spreadIndex = 0; spreadIndex < totalSpreads; spreadIndex++) {
+                const leftPageIndex = spreadIndex * 2;
+                const rightPageIndex = leftPageIndex + 1;
+                
+                const leftPage = storyData.pages[leftPageIndex];
+                const rightPage = storyData.pages[rightPageIndex];
+
                 pagesHtml += `
-                    <div class="page-content" id="page-${i}" style="display: none;">
-                        <div class="page-left">
-                            <div class="page-text">${page.text}</div>
-                            <div class="page-number">${page.pageNumber}</div>
+                    <div class="page-spread" id="spread-${spreadIndex}" style="display: none;">
+                        <div class="page left text-page">
+                            <div class="page-text">${leftPage.text}</div>
+                            <div class="page-number">${leftPage.pageNumber}</div>
                         </div>
-                        <div class="page-right">
-                            <div class="page-image">
-                                <img src="${page.imageUrl}" alt="Illustration for page ${page.pageNumber}" loading="lazy">
+                        ${rightPage ? `
+                            <div class="page right image-page" id="right-page-${spreadIndex}">
+                                <div class="page-image">
+                                    <img src="${rightPage.imageUrl}" alt="Illustration for page ${rightPage.pageNumber}" loading="lazy">
+                                </div>
+                                <div class="page-number">${rightPage.pageNumber}</div>
                             </div>
-                        </div>
+                        ` : `
+                            <div class="page right" id="right-page-${spreadIndex}">
+                                <div style="display: flex; align-items: center; justify-content: center; height: 100%; font-size: 2em; color: #6366f1;">
+                                    The End 🌟
+                                </div>
+                            </div>
+                        `}
                     </div>
                 `;
             }
@@ -568,7 +594,7 @@
                 document.querySelector('.book-cover').classList.add('opened');
                 document.querySelector('.book-pages').classList.add('active');
                 setTimeout(() => {
-                    showPage(0);
+                    showSpread(0);
                 }, 300);
                 bookOpened = true;
                 updateNavigation();
@@ -578,44 +604,81 @@
         function closeBook() {
             document.querySelector('.book-cover').classList.remove('opened');
             document.querySelector('.book-pages').classList.remove('active');
-            // Hide all pages
-            storyData.pages.forEach((_, index) => {
-                document.getElementById(`page-${index}`).style.display = 'none';
-            });
+            
+            // Hide all spreads
+            const totalSpreads = Math.ceil(storyData.pages.length / 2);
+            for (let i = 0; i < totalSpreads; i++) {
+                const spread = document.getElementById(`spread-${i}`);
+                if (spread) spread.style.display = 'none';
+            }
+            
             bookOpened = false;
             updateNavigation();
         }
 
-        function showPage(pageIndex) {
-            // Hide all pages
-            storyData.pages.forEach((_, index) => {
-                document.getElementById(`page-${index}`).style.display = 'none';
-            });
-
-            // Show the current page with animation
-            if (pageIndex >= 0 && pageIndex < storyData.pages.length) {
-                const pageElement = document.getElementById(`page-${pageIndex}`);
-                pageElement.style.display = 'flex';
-                pageElement.classList.add('page-turn-animation');
-                
-                setTimeout(() => {
-                    pageElement.classList.remove('page-turn-animation');
-                }, 600);
+        function showSpread(spreadIndex) {
+            const totalSpreads = Math.ceil(storyData.pages.length / 2);
+            
+            // Hide all spreads
+            for (let i = 0; i < totalSpreads; i++) {
+                const spread = document.getElementById(`spread-${i}`);
+                if (spread) spread.style.display = 'none';
             }
 
-            currentPage = pageIndex;
+            // Show the current spread
+            if (spreadIndex >= 0 && spreadIndex < totalSpreads) {
+                const spread = document.getElementById(`spread-${spreadIndex}`);
+                if (spread) {
+                    spread.style.display = 'flex';
+                }
+            }
+
+            currentSpread = spreadIndex;
             updateNavigation();
         }
 
         function nextPage() {
-            if (currentPage < storyData.pages.length - 1) {
-                showPage(currentPage + 1);
+            if (isAnimating) return;
+            
+            const totalSpreads = Math.ceil(storyData.pages.length / 2);
+            if (currentSpread < totalSpreads - 1) {
+                isAnimating = true;
+                
+                // Get the current right page and animate it turning
+                const currentRightPage = document.getElementById(`right-page-${currentSpread}`);
+                if (currentRightPage) {
+                    currentRightPage.classList.add('turning');
+                }
+                
+                setTimeout(() => {
+                    showSpread(currentSpread + 1);
+                    if (currentRightPage) {
+                        currentRightPage.classList.remove('turning');
+                    }
+                    isAnimating = false;
+                }, 400);
             }
         }
 
         function previousPage() {
-            if (currentPage > 0) {
-                showPage(currentPage - 1);
+            if (isAnimating) return;
+            
+            if (currentSpread > 0) {
+                isAnimating = true;
+                
+                // Show the previous spread immediately, then animate the right page back
+                showSpread(currentSpread - 1);
+                
+                const newRightPage = document.getElementById(`right-page-${currentSpread}`);
+                if (newRightPage) {
+                    newRightPage.classList.add('turning');
+                    setTimeout(() => {
+                        newRightPage.classList.remove('turning');
+                        isAnimating = false;
+                    }, 400);
+                } else {
+                    isAnimating = false;
+                }
             }
         }
 
@@ -635,8 +698,9 @@
             nextBtn.style.display = 'flex';
             closeBtn.style.display = 'flex';
 
-            prevBtn.disabled = currentPage <= 0;
-            nextBtn.disabled = currentPage >= storyData.pages.length - 1;
+            const totalSpreads = Math.ceil(storyData.pages.length / 2);
+            prevBtn.disabled = currentSpread <= 0 || isAnimating;
+            nextBtn.disabled = currentSpread >= totalSpreads - 1 || isAnimating;
         }
 
         function showError(message) {
@@ -658,13 +722,14 @@
             document.getElementById('pages').value = '5';
             
             // Reset book state
-            currentPage = 0;
+            currentSpread = 0;
             bookOpened = false;
+            isAnimating = false;
         }
 
         // Keyboard navigation
         document.addEventListener('keydown', (e) => {
-            if (bookOpened) {
+            if (bookOpened && !isAnimating) {
                 if (e.key === 'ArrowRight') {
                     nextPage();
                 } else if (e.key === 'ArrowLeft') {
