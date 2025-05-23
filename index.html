@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generative Kid Storybook Creator</title>
+    <style>
+        body {
+            font-family: 'Comic Sans MS', cursive, sans-serif;
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 50%, #fecfef 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: #6366f1;
+            font-size: 2.5em;
+            margin-bottom: 30px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .form-section {
+            background: #f8fafc;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            border: 3px solid #e2e8f0;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #374151;
+            font-size: 1.1em;
+        }
+
+        input, textarea, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #d1d5db;
+            border-radius: 10px;
+            font-size: 16px;
+            font-family: inherit;
+            box-sizing: border-box;
+        }
+
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: block;
+            margin: 20px auto;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(99, 102, 241, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            font-size: 18px;
+            color: #6366f1;
+        }
+
+        .storybook {
+            margin-top: 30px;
+        }
+
+        .page {
+            background: white;
+            border: 3px solid #e2e8f0;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 25px;
+            align-items: center;
+            min-height: 300px;
+        }
+
+        .page:nth-child(even) {
+            flex-direction: row-reverse;
+        }
+
+        .page-text {
+            flex: 1;
+            font-size: 18px;
+            line-height: 1.6;
+            color: #374151;
+        }
+
+        .page-image {
+            flex: 1;
+            text-align: center;
+        }
+
+        .page-image img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 10px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+        }
+
+        .page-number {
+            background: #6366f1;
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin: 0 auto 15px;
+        }
+
+        .error {
+            color: #ef4444;
+            background: #fef2f2;
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid #fecaca;
+            margin: 15px 0;
+        }
+
+        @media (max-width: 768px) {
+            .page {
+                flex-direction: column !important;
+            }
+            
+            .page-text {
+                order: 2;
+            }
+            
+            .page-image {
+                order: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌟 Magical Storybook Creator 🌟</h1>
+        
+        <div class="form-section" id="storyForm">
+            <div class="form-group">
+                <label for="pages">Number of Pages (3-10):</label>
+                <select id="pages">
+                    <option value="3">3 Pages</option>
+                    <option value="4">4 Pages</option>
+                    <option value="5" selected>5 Pages</option>
+                    <option value="6">6 Pages</option>
+                    <option value="7">7 Pages</option>
+                    <option value="8">8 Pages</option>
+                    <option value="9">9 Pages</option>
+                    <option value="10">10 Pages</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="storyTopic">What should the story be about?</label>
+                <textarea id="storyTopic" placeholder="e.g., A brave little mouse who wants to become a knight, or a magical garden where vegetables come to life..."></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="mainCharacters">Main Characters (optional):</label>
+                <input type="text" id="mainCharacters" placeholder="e.g., Luna the rabbit, Captain Whiskers...">
+            </div>
+
+            <div class="form-group">
+                <label for="sideCharacters">Side Characters (optional):</label>
+                <input type="text" id="sideCharacters" placeholder="e.g., Old Oak Tree, Sparkle the fairy...">
+            </div>
+
+            <button onclick="generateStory()">✨ Create My Story! ✨</button>
+        </div>
+
+        <div id="loadingDiv" class="loading" style="display: none;">
+            <div>🌟 Creating your magical story...</div>
+            <div style="margin-top: 10px; font-size: 14px;">This may take a few moments while we generate text and illustrations!</div>
+        </div>
+
+        <div id="errorDiv" class="error" style="display: none;"></div>
+
+        <div id="storybook" class="storybook"></div>
+    </div>
+
+    <script>
+        let storyData = {
+            pages: [],
+            topic: '',
+            mainCharacters: '',
+            sideCharacters: '',
+            totalPages: 0
+        };
+
+        async function generateStory() {
+            const pages = parseInt(document.getElementById('pages').value);
+            const topic = document.getElementById('storyTopic').value.trim();
+            const mainCharacters = document.getElementById('mainCharacters').value.trim();
+            const sideCharacters = document.getElementById('sideCharacters').value.trim();
+
+            if (!topic) {
+                showError('Please tell us what your story should be about!');
+                return;
+            }
+
+            storyData = {
+                pages: [],
+                topic,
+                mainCharacters,
+                sideCharacters,
+                totalPages: pages
+            };
+
+            try {
+                document.getElementById('storyForm').style.display = 'none';
+                document.getElementById('loadingDiv').style.display = 'block';
+                document.getElementById('errorDiv').style.display = 'none';
+
+                // Generate the complete story text
+                await generateStoryText();
+                
+                // Generate images for each page
+                await generateStoryImages();
+
+                // Display the completed storybook
+                displayStorybook();
+
+            } catch (error) {
+                console.error('Error generating story:', error);
+                showError('Oops! Something went wrong while creating your story. Please try again!');
+                resetForm();
+            }
+        }
+
+        async function generateStoryText() {
+            const systemPrompt = `You are a creative children's story writer. Create an engaging, age-appropriate story for kids aged 4-8. 
+            
+            The story should be split into exactly ${storyData.totalPages} pages with clear, simple text suitable for young children.
+            
+            Story requirements:
+            - Topic: ${storyData.topic}
+            ${storyData.mainCharacters ? `- Main characters: ${storyData.mainCharacters}` : ''}
+            ${storyData.sideCharacters ? `- Side characters: ${storyData.sideCharacters}` : ''}
+            - Each page should have 1-3 sentences
+            - Use simple, engaging language
+            - Include a clear beginning, middle, and end
+            - Make it positive and inspiring
+            
+            Respond with JSON in this exact format:
+            {
+              "title": "Story Title",
+              "pages": [
+                {
+                  "pageNumber": 1,
+                  "text": "Page 1 text here"
+                },
+                {
+                  "pageNumber": 2,
+                  "text": "Page 2 text here"
+                }
+              ]
+            }`;
+
+            const completion = await websim.chat.completions.create({
+                messages: [
+                    {
+                        role: "system",
+                        content: systemPrompt
+                    },
+                    {
+                        role: "user",
+                        content: "Please create my story!"
+                    }
+                ],
+                json: true
+            });
+
+            const result = JSON.parse(completion.content);
+            storyData.title = result.title;
+            storyData.pages = result.pages;
+        }
+
+        async function generateStoryImages() {
+            for (let i = 0; i < storyData.pages.length; i++) {
+                const page = storyData.pages[i];
+                
+                // Create a detailed prompt for the image
+                let imagePrompt = `Children's book illustration, ${page.text}`;
+                
+                // Add character information if available
+                if (storyData.mainCharacters) {
+                    imagePrompt += ` featuring ${storyData.mainCharacters}`;
+                }
+                
+                // Add style information
+                imagePrompt += `. Colorful, cheerful, cartoon style, suitable for children aged 4-8, bright and vibrant colors, simple and clear composition.`;
+
+                const imageResult = await websim.imageGen({
+                    prompt: imagePrompt,
+                    aspect_ratio: "4:3"
+                });
+
+                page.imageUrl = imageResult.url;
+            }
+        }
+
+        function displayStorybook() {
+            document.getElementById('loadingDiv').style.display = 'none';
+            
+            const storybookDiv = document.getElementById('storybook');
+            
+            let html = `<h2 style="text-align: center; color: #6366f1; margin-bottom: 30px;">${storyData.title}</h2>`;
+            
+            storyData.pages.forEach(page => {
+                html += `
+                    <div class="page">
+                        <div class="page-text">
+                            <div class="page-number">${page.pageNumber}</div>
+                            ${page.text}
+                        </div>
+                        <div class="page-image">
+                            <img src="${page.imageUrl}" alt="Illustration for page ${page.pageNumber}" loading="lazy">
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += `
+                <div style="text-align: center; margin-top: 30px;">
+                    <button onclick="resetForm()">📚 Create Another Story!</button>
+                </div>
+            `;
+
+            storybookDiv.innerHTML = html;
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorDiv');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        function resetForm() {
+            document.getElementById('storyForm').style.display = 'block';
+            document.getElementById('loadingDiv').style.display = 'none';
+            document.getElementById('errorDiv').style.display = 'none';
+            document.getElementById('storybook').innerHTML = '';
+            
+            // Reset form fields
+            document.getElementById('storyTopic').value = '';
+            document.getElementById('mainCharacters').value = '';
+            document.getElementById('sideCharacters').value = '';
+            document.getElementById('pages').value = '5';
+        }
+    </script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4c6229722a6346bc8eb5cb0e5eae5d41","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>
+
