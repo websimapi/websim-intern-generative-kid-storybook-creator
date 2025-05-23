@@ -759,17 +759,21 @@ Keep the description detailed but concise for illustration consistency.`;
                     
                     const charactersForPage = await determinePageCharacters(page, i);
                     
-                    let imagePrompt = `Children's book illustration: ${page.text}`;
+                    let imagePrompt = `Children's book illustration: ${page.text}.`;
                     
                     for (const characterName of charactersForPage) {
                         const characterData = storyData.characterDescriptions[characterName];
                         if (characterData) {
                             const description = characterData.visualAnalysis || characterData.initialDescription;
-                            imagePrompt += ` Character "${characterName}" should look exactly like this: ${description}`;
+                            imagePrompt += ` "${characterName}" - ${description}.`;
                         }
                     }
                     
-                    imagePrompt += `. Scene should match the story context. Colorful, cheerful, cartoon style suitable for children aged 4-8, bright and vibrant colors, clear composition.`;
+                    imagePrompt += ` Make sure all characters look exactly as described.`;
+                    imagePrompt += ` Scene should match the story context and show the action/setting described in the text. Colorful, cheerful, cartoon style suitable for children aged 4-8, bright and vibrant colors, clear composition.`;
+
+                    console.log(`Page ${i + 1} characters:`, charactersForPage);
+                    console.log(`Page ${i + 1} prompt:`, imagePrompt);
 
                     const imageResult = await websim.imageGen({
                         prompt: imagePrompt,
@@ -781,6 +785,7 @@ Keep the description detailed but concise for illustration consistency.`;
                     }
 
                     page.imageUrl = imageResult.url;
+                    page.charactersIncluded = charactersForPage; // Store for debugging
                 }
                 
             } catch (error) {
@@ -796,6 +801,9 @@ Keep the description detailed but concise for illustration consistency.`;
                     return [];
                 }
                 
+                const mainCharactersList = storyData.mainCharacters ? 
+                    storyData.mainCharacters.split(',').map(c => c.trim()).filter(c => c.length > 0) : [];
+                
                 let contextText = page.text;
                 if (pageIndex > 0) {
                     contextText = storyData.pages[pageIndex - 1].text + ' ' + contextText;
@@ -808,18 +816,21 @@ Keep the description detailed but concise for illustration consistency.`;
 
 Page text: "${page.text}"
 Context from nearby pages: "${contextText}"
+Story topic: "${storyData.topic}"
 
 Available characters: ${allCharacterNames.join(', ')}
+Main characters: ${mainCharactersList.join(', ') || 'None specified'}
 
-Consider:
-- Characters explicitly mentioned in the text
-- Characters who would logically be present in the scene
-- Characters involved in dialogue or actions
-- Main characters who are central to the story
+Guidelines:
+- Include main characters unless the scene clearly doesn't involve them
+- Include characters mentioned directly or indirectly in the text
+- Include characters who would logically be present in the scene
+- For dialogue or interactive scenes, include both speakers/participants
+- If the page involves actions between characters, include all involved characters
 
-Return ONLY a comma-separated list of character names that should appear in this page's illustration. If no characters should appear, return "none".
+Return a comma-separated list of character names that should appear in this page's illustration. Be generous in including main characters.
 
-Example response: "Luna, Captain Whiskers" or "none"`;
+Example response: "Luna, Captain Whiskers" or "Luna"`;
 
                 const completion = await websim.chat.completions.create({
                     messages: [
@@ -833,7 +844,7 @@ Example response: "Luna, Captain Whiskers" or "none"`;
                 const response = completion.content.trim().toLowerCase();
                 
                 if (response === 'none' || response === '') {
-                    return [];
+                    return this.getDefaultCharactersForPage(page, pageIndex, allCharacterNames, mainCharactersList);
                 }
                 
                 const suggestedCharacters = response.split(',').map(c => c.trim());
@@ -849,22 +860,58 @@ Example response: "Luna, Captain Whiskers" or "none"`;
                     }
                 }
                 
+                if (matchedCharacters.length === 0 && mainCharactersList.length > 0) {
+                    return this.getDefaultCharactersForPage(page, pageIndex, allCharacterNames, mainCharactersList);
+                }
+                
                 return [...new Set(matchedCharacters)];
                 
             } catch (error) {
-                console.warn(`Failed to determine characters for page ${pageIndex}, falling back to text-based detection:`, error);
-                
-                const pageText = page.text.toLowerCase();
-                const foundCharacters = [];
-                
-                for (const characterName of Object.keys(storyData.characterDescriptions)) {
-                    if (pageText.includes(characterName.toLowerCase())) {
-                        foundCharacters.push(characterName);
-                    }
+                console.warn(`Failed to determine characters for page ${pageIndex}, using fallback logic:`, error);
+                return this.getDefaultCharactersForPage(page, pageIndex, Object.keys(storyData.characterDescriptions), 
+                    storyData.mainCharacters ? storyData.mainCharacters.split(',').map(c => c.trim()) : []);
+            }
+        }
+
+        function getDefaultCharactersForPage(page, pageIndex, allCharacterNames, mainCharactersList) {
+            const pageText = page.text.toLowerCase();
+            const foundCharacters = [];
+            
+            for (const characterName of allCharacterNames) {
+                if (pageText.includes(characterName.toLowerCase()) || 
+                    pageText.includes(characterName.toLowerCase().split(' ')[0])) { 
+                    foundCharacters.push(characterName);
                 }
-                
+            }
+            
+            if (foundCharacters.length > 0) {
                 return foundCharacters;
             }
+            
+            const mainCharactersInStory = mainCharactersList.filter(mainChar => 
+                allCharacterNames.some(char => 
+                    char.toLowerCase().includes(mainChar.toLowerCase()) || 
+                    mainChar.toLowerCase().includes(char.toLowerCase())
+                )
+            );
+            
+            if (mainCharactersInStory.length > 0) {
+                const excludeKeywords = ['landscape', 'scenery', 'setting', 'background', 'environment'];
+                const shouldExcludeMainCharacters = excludeKeywords.some(keyword => 
+                    pageText.includes(keyword)
+                );
+                
+                if (!shouldExcludeMainCharacters) {
+                    return allCharacterNames.filter(char => 
+                        mainCharactersInStory.some(mainChar => 
+                            char.toLowerCase().includes(mainChar.toLowerCase()) || 
+                            mainChar.toLowerCase().includes(char.toLowerCase())
+                        )
+                    );
+                }
+            }
+            
+            return [];
         }
 
         function displayStorybook() {
