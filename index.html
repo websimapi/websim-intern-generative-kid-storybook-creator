@@ -317,6 +317,59 @@
             margin-top: 30px;
         }
 
+        .page-regenerate {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            opacity: 0.8;
+            z-index: 5;
+        }
+
+        .page-regenerate:hover {
+            opacity: 1;
+            transform: translateY(-1px);
+            box-shadow: 0 3px 10px rgba(245, 158, 11, 0.4);
+        }
+
+        .page-regenerate:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .page-image-container {
+            position: relative;
+            text-align: center;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .page-loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-radius: 10px;
+            font-size: 14px;
+            color: #6366f1;
+            font-weight: bold;
+            z-index: 10;
+            display: none;
+        }
+
         @media (max-width: 768px) {
             .book-container {
                 width: 90vw;
@@ -1024,8 +1077,16 @@ Example response: "Luna, Captain Whiskers" or "Luna"`;
                             <div class="page-number">${page.pageNumber}</div>
                         </div>
                         <div class="page-right">
-                            <div class="page-image">
-                                <img src="${page.imageUrl}" alt="Illustration for page ${page.pageNumber}" loading="lazy">
+                            <div class="page-image-container">
+                                <button class="page-regenerate" onclick="regeneratePageImage(${i})" id="regen-btn-${i}">
+                                    🎨 New Image
+                                </button>
+                                <div class="page-loading" id="page-loading-${i}">
+                                    🎨 Creating new illustration...
+                                </div>
+                                <div class="page-image">
+                                    <img src="${page.imageUrl}" alt="Illustration for page ${page.pageNumber}" loading="lazy" id="page-img-${i}">
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1033,6 +1094,68 @@ Example response: "Luna, Captain Whiskers" or "Luna"`;
             }
 
             bookPages.innerHTML = pagesHtml;
+        }
+
+        async function regeneratePageImage(pageIndex) {
+            if (pageIndex < 0 || pageIndex >= storyData.pages.length) {
+                console.error('Invalid page index:', pageIndex);
+                return;
+            }
+
+            const page = storyData.pages[pageIndex];
+            const regenButton = document.getElementById(`regen-btn-${pageIndex}`);
+            const loadingDiv = document.getElementById(`page-loading-${pageIndex}`);
+            const imageElement = document.getElementById(`page-img-${pageIndex}`);
+
+            try {
+                // Show loading state
+                regenButton.disabled = true;
+                loadingDiv.style.display = 'block';
+
+                // Determine characters for this page
+                const charactersForPage = await determinePageCharacters(page, pageIndex);
+                
+                // Create refined image prompt
+                const refinedPrompt = await createRefinedImagePrompt(page, charactersForPage);
+                
+                console.log(`Regenerating page ${pageIndex + 1} with prompt:`, refinedPrompt);
+
+                // Generate new image
+                const imageResult = await websim.imageGen({
+                    prompt: refinedPrompt,
+                    aspect_ratio: "4:3"
+                });
+
+                if (!imageResult || !imageResult.url) {
+                    throw new Error(`Failed to regenerate illustration for page ${page.pageNumber}`);
+                }
+
+                // Update the page data and UI
+                page.imageUrl = imageResult.url;
+                page.charactersIncluded = charactersForPage;
+                imageElement.src = imageResult.url;
+
+                console.log(`Successfully regenerated image for page ${pageIndex + 1}`);
+
+            } catch (error) {
+                console.error(`Failed to regenerate image for page ${pageIndex + 1}:`, error);
+                
+                // Show error message briefly
+                loadingDiv.textContent = '❌ Failed to create new image';
+                loadingDiv.style.color = '#ef4444';
+                
+                setTimeout(() => {
+                    loadingDiv.textContent = '🎨 Creating new illustration...';
+                    loadingDiv.style.color = '#6366f1';
+                }, 3000);
+                
+            } finally {
+                // Hide loading state and re-enable button
+                setTimeout(() => {
+                    loadingDiv.style.display = 'none';
+                    regenButton.disabled = false;
+                }, 1000);
+            }
         }
 
         function openBook() {
