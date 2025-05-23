@@ -497,8 +497,17 @@
                 updateLoadingText('📸 Creating character reference images...');
                 await retryWithBackoff(generateCharacterImages, MAX_RETRIES, 'character images');
                 
-                updateLoadingText('🔍 Analyzing character appearances...');
-                await retryWithBackoff(analyzeCharacterImages, MAX_RETRIES, 'character analysis');
+                updateLoadingText('🔍 Enhancing character consistency...');
+                try {
+                    await retryWithBackoff(analyzeCharacterImages, 2, 'character analysis'); 
+                } catch (error) {
+                    console.warn('Character analysis failed, using initial descriptions:', error);
+                    for (const [characterName, characterData] of Object.entries(storyData.characterDescriptions)) {
+                        if (!characterData.visualAnalysis) {
+                            characterData.visualAnalysis = characterData.initialDescription;
+                        }
+                    }
+                }
                 
                 updateLoadingText('🖼️ Creating story illustrations...');
                 await retryWithBackoff(generateStoryImages, MAX_RETRIES, 'story illustrations');
@@ -680,41 +689,61 @@ Respond with just the visual description, no other text.`;
         async function analyzeCharacterImages() {
             try {
                 for (const [characterName, characterData] of Object.entries(storyData.characterDescriptions)) {
-                    const analysisPrompt = `Analyze this character image and provide a detailed visual description that can be used to maintain consistency in future illustrations. Focus on:
+                    if (!characterData.referenceImageUrl) {
+                        console.warn(`No reference image for character: ${characterName}, skipping analysis`);
+                        characterData.visualAnalysis = characterData.initialDescription;
+                        continue;
+                    }
 
-- Exact colors used (be specific about shades)
-- Body shape and proportions
-- Facial features and expressions
-- Clothing details and patterns
+                    if (Object.keys(storyData.characterDescriptions).indexOf(characterName) > 0) {
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    }
+
+                    const analysisPrompt = `Analyze this character image and provide a detailed visual description for consistent illustration. Be specific about:
+
+- Exact colors and shades used
+- Body shape, size, and proportions  
+- Facial features and expression
+- Clothing details, patterns, textures
 - Any accessories or distinctive features
-- Art style characteristics
+- Overall art style and visual characteristics
 
-Be very detailed and specific so this description can be used to recreate the character consistently.
+Keep the description detailed but concise for illustration consistency.`;
 
-Respond with just the detailed visual analysis, no other text.`;
+                    try {
+                        const analysisCompletion = await websim.chat.completions.create({
+                            messages: [
+                                {
+                                    role: "user",
+                                    content: [
+                                        {
+                                            type: "text",
+                                            text: analysisPrompt
+                                        },
+                                        {
+                                            type: "image_url",
+                                            image_url: { url: characterData.referenceImageUrl }
+                                        }
+                                    ]
+                                }
+                            ]
+                        });
 
-                    const analysisCompletion = await websim.chat.completions.create({
-                        messages: [
-                            {
-                                role: "user",
-                                content: [
-                                    {
-                                        type: "text",
-                                        text: analysisPrompt
-                                    },
-                                    {
-                                        type: "image_url",
-                                        image_url: { url: characterData.referenceImageUrl }
-                                    }
-                                ]
-                            }
-                        ]
-                    });
-
-                    characterData.visualAnalysis = analysisCompletion.content;
+                        characterData.visualAnalysis = analysisCompletion.content;
+                        
+                    } catch (imageAnalysisError) {
+                        console.warn(`Failed to analyze image for ${characterName}, using initial description:`, imageAnalysisError);
+                        characterData.visualAnalysis = characterData.initialDescription;
+                    }
                 }
                 
             } catch (error) {
+                console.warn('Character analysis step failed, using initial descriptions:', error);
+                for (const [characterName, characterData] of Object.entries(storyData.characterDescriptions)) {
+                    if (!characterData.visualAnalysis) {
+                        characterData.visualAnalysis = characterData.initialDescription;
+                    }
+                }
                 throw new Error(`Character analysis failed: ${error.message}`);
             }
         }
@@ -724,12 +753,17 @@ Respond with just the detailed visual analysis, no other text.`;
                 for (let i = 0; i < storyData.pages.length; i++) {
                     const page = storyData.pages[i];
                     
+                    if (i > 0) {
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    }
+                    
                     let imagePrompt = `Children's book illustration: ${page.text}`;
                     
                     const pageText = page.text.toLowerCase();
                     for (const [characterName, characterData] of Object.entries(storyData.characterDescriptions)) {
                         if (pageText.includes(characterName.toLowerCase())) {
-                            imagePrompt += ` Character "${characterName}" should look exactly like this: ${characterData.visualAnalysis}`;
+                            const description = characterData.visualAnalysis || characterData.initialDescription;
+                            imagePrompt += ` Character "${characterName}" should look exactly like this: ${description}`;
                         }
                     }
                     
