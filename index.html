@@ -759,18 +759,48 @@ Keep the description detailed but concise for illustration consistency.`;
                     
                     const charactersForPage = await determinePageCharacters(page, i);
                     
-                    let imagePrompt = `Children's book illustration: ${page.text}.`;
+                    let imagePrompt = '';
                     
-                    for (const characterName of charactersForPage) {
-                        const characterData = storyData.characterDescriptions[characterName];
-                        if (characterData) {
-                            const description = characterData.visualAnalysis || characterData.initialDescription;
-                            imagePrompt += ` "${characterName}" - ${description}.`;
+                    // Start with character descriptions upfront if there are characters
+                    if (charactersForPage.length > 0) {
+                        imagePrompt += `Children's book illustration featuring `;
+                        
+                        // Build character descriptions for the scene
+                        const characterDescriptions = [];
+                        for (const characterName of charactersForPage) {
+                            const characterData = storyData.characterDescriptions[characterName];
+                            if (characterData) {
+                                const description = characterData.visualAnalysis || characterData.initialDescription;
+                                characterDescriptions.push(`${characterName} (${description})`);
+                            }
                         }
+                        
+                        // Join characters with proper grammar
+                        if (characterDescriptions.length === 1) {
+                            imagePrompt += characterDescriptions[0];
+                        } else if (characterDescriptions.length === 2) {
+                            imagePrompt += `${characterDescriptions[0]} and ${characterDescriptions[1]} together in the same scene`;
+                        } else {
+                            const lastCharacter = characterDescriptions.pop();
+                            imagePrompt += `${characterDescriptions.join(', ')}, and ${lastCharacter} all together in the same scene`;
+                        }
+                        
+                        imagePrompt += `. `;
+                    } else {
+                        imagePrompt += `Children's book illustration: `;
                     }
                     
-                    imagePrompt += ` Make sure all characters look exactly as described.`;
-                    imagePrompt += ` Scene should match the story context and show the action/setting described in the text. Colorful, cheerful, cartoon style suitable for children aged 4-8, bright and vibrant colors, clear composition.`;
+                    // Add the scene context and action
+                    imagePrompt += `Scene: ${page.text}. `;
+                    
+                    // Add positioning and interaction guidance for multiple characters
+                    if (charactersForPage.length > 1) {
+                        imagePrompt += `Show all ${charactersForPage.length} characters clearly visible and interacting within the same frame. `;
+                        imagePrompt += `Each character should be distinctly recognizable with their unique features. `;
+                    }
+                    
+                    // Add style guidance
+                    imagePrompt += `Bright, colorful, cartoon style suitable for children aged 4-8. Clear composition with vibrant colors. Make sure the scene directly illustrates the story text with all mentioned characters present and visible.`;
 
                     console.log(`Page ${i + 1} characters:`, charactersForPage);
                     console.log(`Page ${i + 1} prompt:`, imagePrompt);
