@@ -759,54 +759,13 @@ Keep the description detailed but concise for illustration consistency.`;
                     
                     const charactersForPage = await determinePageCharacters(page, i);
                     
-                    let imagePrompt = '';
+                    const refinedPrompt = await createRefinedImagePrompt(page, charactersForPage);
                     
-                    // Start with character descriptions upfront if there are characters
-                    if (charactersForPage.length > 0) {
-                        imagePrompt += `Children's book illustration featuring `;
-                        
-                        // Build character descriptions for the scene
-                        const characterDescriptions = [];
-                        for (const characterName of charactersForPage) {
-                            const characterData = storyData.characterDescriptions[characterName];
-                            if (characterData) {
-                                const description = characterData.visualAnalysis || characterData.initialDescription;
-                                characterDescriptions.push(`${characterName} (${description})`);
-                            }
-                        }
-                        
-                        // Join characters with proper grammar
-                        if (characterDescriptions.length === 1) {
-                            imagePrompt += characterDescriptions[0];
-                        } else if (characterDescriptions.length === 2) {
-                            imagePrompt += `${characterDescriptions[0]} and ${characterDescriptions[1]} together in the same scene`;
-                        } else {
-                            const lastCharacter = characterDescriptions.pop();
-                            imagePrompt += `${characterDescriptions.join(', ')}, and ${lastCharacter} all together in the same scene`;
-                        }
-                        
-                        imagePrompt += `. `;
-                    } else {
-                        imagePrompt += `Children's book illustration: `;
-                    }
-                    
-                    // Add the scene context and action
-                    imagePrompt += `Scene: ${page.text}. `;
-                    
-                    // Add positioning and interaction guidance for multiple characters
-                    if (charactersForPage.length > 1) {
-                        imagePrompt += `Show all ${charactersForPage.length} characters clearly visible and interacting within the same frame. `;
-                        imagePrompt += `Each character should be distinctly recognizable with their unique features. `;
-                    }
-                    
-                    // Add style guidance
-                    imagePrompt += `Bright, colorful, cartoon style suitable for children aged 4-8. Clear composition with vibrant colors. Make sure the scene directly illustrates the story text with all mentioned characters present and visible.`;
-
                     console.log(`Page ${i + 1} characters:`, charactersForPage);
-                    console.log(`Page ${i + 1} prompt:`, imagePrompt);
+                    console.log(`Page ${i + 1} refined prompt:`, refinedPrompt);
 
                     const imageResult = await websim.imageGen({
-                        prompt: imagePrompt,
+                        prompt: refinedPrompt,
                         aspect_ratio: "4:3"
                     });
 
@@ -815,11 +774,68 @@ Keep the description detailed but concise for illustration consistency.`;
                     }
 
                     page.imageUrl = imageResult.url;
-                    page.charactersIncluded = charactersForPage; // Store for debugging
+                    page.charactersIncluded = charactersForPage; 
                 }
                 
             } catch (error) {
                 throw new Error(`Story illustration generation failed: ${error.message}`);
+            }
+        }
+
+        async function createRefinedImagePrompt(page, charactersForPage) {
+            try {
+                let characterInfo = '';
+                
+                if (charactersForPage.length > 0) {
+                    const characterDescriptions = [];
+                    for (const characterName of charactersForPage) {
+                        const characterData = storyData.characterDescriptions[characterName];
+                        if (characterData) {
+                            const description = characterData.visualAnalysis || characterData.initialDescription;
+                            characterDescriptions.push(`${characterName}: ${description}`);
+                        }
+                    }
+                    characterInfo = characterDescriptions.join('\n');
+                }
+
+                const promptRefinementRequest = `Create a concise but detailed image generation prompt for a children's book illustration. 
+
+Page text: "${page.text}"
+Story topic: "${storyData.topic}"
+
+${characterInfo ? `Characters to include in the scene:\n${characterInfo}` : 'No specific characters for this scene.'}
+
+Requirements:
+- Keep prompt under 150 words
+- Include all specified characters with their key visual details
+- Describe the scene/action from the page text
+- Maintain child-friendly cartoon style
+- Ensure all characters are clearly visible and interacting if applicable
+- Make it vivid and specific for consistent illustration
+
+Return only the refined image prompt, no other text.`;
+
+                const completion = await websim.chat.completions.create({
+                    messages: [
+                        {
+                            role: "user",
+                            content: promptRefinementRequest
+                        }
+                    ]
+                });
+
+                return completion.content.trim();
+                
+            } catch (error) {
+                console.warn('Failed to refine image prompt, using fallback:', error);
+                let fallbackPrompt = `Children's book illustration: ${page.text}. `;
+                
+                if (charactersForPage.length > 0) {
+                    fallbackPrompt += `Characters: ${charactersForPage.join(', ')} all visible in scene. `;
+                }
+                
+                fallbackPrompt += `Bright, colorful cartoon style for children aged 4-8.`;
+                return fallbackPrompt;
             }
         }
 
