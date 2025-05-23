@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Generative Kid Storybook Creator</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/turn.js@4.1.0/turn.min.js"></script>
     <style>
         body {
             font-family: 'Comic Sans MS', cursive, sans-serif;
@@ -105,93 +107,64 @@
 
         .storybook {
             margin-top: 30px;
-            perspective: 1500px;
+            text-align: center;
+        }
+
+        .story-title {
+            text-align: center;
+            color: #6366f1;
+            font-size: 2.2em;
+            margin-bottom: 30px;
+            font-weight: bold;
         }
 
         .book-container {
+            display: inline-block;
+            margin: 0 auto;
             position: relative;
-            width: 900px;
+        }
+
+        #flipbook {
+            width: 800px;
             height: 600px;
             margin: 0 auto;
-            transform-style: preserve-3d;
-        }
-
-        .book-spine {
-            position: absolute;
-            left: 435px;
-            top: 0;
-            width: 30px;
-            height: 100%;
-            background: linear-gradient(to bottom, #8b4513, #654321);
-            border-radius: 5px;
-            box-shadow: 0 0 15px rgba(0,0,0,0.3);
-            z-index: 5;
-        }
-
-        .book-cover {
-            position: absolute;
-            width: 450px;
-            height: 100%;
-            background: linear-gradient(135deg, #6366f1, #8b5cf6);
-            border-radius: 15px 0 0 15px;
-            box-shadow: -10px 0 30px rgba(0,0,0,0.3);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 2.5em;
-            font-weight: bold;
-            text-align: center;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-            cursor: pointer;
-            transition: transform 0.8s ease;
-            transform-origin: right center;
-            backface-visibility: hidden;
-            z-index: 10;
-        }
-
-        .book-cover.opened {
-            transform: rotateY(180deg);
-        }
-
-        .book-pages {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            display: none;
-        }
-
-        .book-pages.active {
-            display: block;
         }
 
         .page {
-            position: absolute;
-            width: 450px;
-            height: 100%;
-            background: #fefefe;
-            border: 2px solid #e2e8f0;
-            transition: transform 0.8s ease;
-            transform-origin: right center;
-            backface-visibility: hidden;
-            cursor: pointer;
+            width: 400px;
+            height: 600px;
+            background: white;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
         }
 
-        .page-left {
-            left: 0;
-            border-radius: 15px 0 0 15px;
-            box-shadow: 5px 0 15px rgba(0,0,0,0.1);
+        .book-cover {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-size: 2.5em;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
         }
 
-        .page-right {
-            right: 0;
-            border-radius: 0 15px 15px 0;
-            box-shadow: -5px 0 15px rgba(0,0,0,0.1);
+        .book-cover .subtitle {
+            font-size: 0.4em;
+            margin-top: 20px;
+            opacity: 0.9;
         }
 
         .page-content {
+            width: 100%;
+            height: 100%;
             padding: 40px;
-            height: calc(100% - 80px);
+            box-sizing: border-box;
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -200,23 +173,29 @@
             position: relative;
         }
 
+        .text-page .page-content {
+            background: #fefefe;
+        }
+
+        .image-page .page-content {
+            background: #f8fafc;
+            padding: 20px;
+        }
+
         .page-text {
-            font-size: 20px;
+            font-size: 22px;
             line-height: 1.8;
             color: #374151;
-            margin-bottom: 20px;
-            flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            text-align: center;
+            max-width: 300px;
         }
 
         .page-image {
-            flex: 1;
+            width: 100%;
+            height: 100%;
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 100%;
         }
 
         .page-image img {
@@ -244,18 +223,24 @@
             font-size: 14px;
         }
 
-        .page.flipped {
-            transform: rotateY(180deg);
+        .back-cover {
+            background: linear-gradient(135deg, #8b5cf6, #6366f1);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-size: 1.8em;
+            font-weight: bold;
         }
 
         .navigation {
-            position: absolute;
-            bottom: -60px;
-            left: 50%;
-            transform: translateX(-50%);
+            margin-top: 30px;
             display: flex;
+            justify-content: center;
             gap: 20px;
-            z-index: 20;
+            flex-wrap: wrap;
         }
 
         .nav-button {
@@ -293,43 +278,65 @@
             margin: 15px 0;
         }
 
-        .story-title {
-            text-align: center;
-            color: #6366f1;
-            font-size: 2.2em;
-            margin-bottom: 30px;
-            font-weight: bold;
-        }
-
         .create-another {
             text-align: center;
-            margin-top: 80px;
+            margin-top: 40px;
         }
 
+        /* Turn.js styling */
+        .turn-page {
+            background-color: white;
+            background-size: 100% 100%;
+        }
+
+        .turn-page-wrapper {
+            perspective: 2000px;
+        }
+
+        /* Responsive design */
         @media (max-width: 768px) {
-            .book-container {
-                width: 90vw;
-                height: 60vh;
-                max-width: 600px;
-                max-height: 400px;
+            #flipbook {
+                width: 600px;
+                height: 450px;
             }
 
             .page {
-                width: 45%;
+                width: 300px;
+                height: 450px;
             }
 
-            .book-spine {
-                left: 47.5%;
-                width: 5%;
+            .page-text {
+                font-size: 18px;
+                max-width: 250px;
+            }
+
+            .book-cover {
+                font-size: 2em;
+            }
+        }
+
+        @media (max-width: 600px) {
+            #flipbook {
+                width: 400px;
+                height: 300px;
+            }
+
+            .page {
+                width: 200px;
+                height: 300px;
+            }
+
+            .page-content {
+                padding: 20px;
             }
 
             .page-text {
                 font-size: 16px;
+                max-width: 160px;
             }
 
             .book-cover {
                 font-size: 1.5em;
-                width: 45%;
             }
         }
     </style>
@@ -391,8 +398,7 @@
             fullStoryContext: ''
         };
 
-        let currentSpread = 0; // Which spread (pair of pages) we're on
-        let bookOpened = false;
+        let flipbook;
 
         async function generateStory() {
             const pages = parseInt(document.getElementById('pages').value);
@@ -553,27 +559,18 @@
             let html = `
                 <div class="story-title">${storyData.title}</div>
                 <div class="book-container">
-                    <div class="book-spine"></div>
-                    <div class="book-cover" onclick="openBook()">
-                        <div>
-                            <div>📖</div>
-                            <div style="font-size: 0.6em; margin-top: 10px;">Click to open</div>
-                        </div>
-                    </div>
-                    <div class="book-pages" id="bookPages">
-                        <!-- Pages will be inserted here -->
-                    </div>
-                    <div class="navigation">
-                        <button class="nav-button" onclick="previousSpread()" id="prevBtn">
-                            ← Previous
-                        </button>
-                        <button class="nav-button" onclick="nextSpread()" id="nextBtn">
-                            Next →
-                        </button>
-                        <button class="nav-button" onclick="closeBook()" id="closeBtn">
-                            Close Book
-                        </button>
-                    </div>
+                    <div id="flipbook"></div>
+                </div>
+                <div class="navigation">
+                    <button class="nav-button" onclick="previousPage()" id="prevBtn">
+                        ← Previous Page
+                    </button>
+                    <button class="nav-button" onclick="nextPage()" id="nextBtn">
+                        Next Page →
+                    </button>
+                    <button class="nav-button" onclick="goToFirstPage()" id="firstBtn">
+                        📖 First Page
+                    </button>
                 </div>
                 <div class="create-another">
                     <button onclick="resetForm()">📚 Create Another Story!</button>
@@ -581,24 +578,37 @@
             `;
 
             storybookDiv.innerHTML = html;
-            generatePages();
-            currentSpread = 0;
-            bookOpened = false;
-            updateNavigation();
+            
+            // Initialize the flipbook after a short delay to ensure DOM is ready
+            setTimeout(() => {
+                initializeFlipbook();
+            }, 100);
         }
 
-        function generatePages() {
-            const bookPages = document.getElementById('bookPages');
+        function initializeFlipbook() {
+            const flipbookEl = document.getElementById('flipbook');
+            
+            // Create pages HTML
             let pagesHtml = '';
-
-            // Create pages - each spread has a left page (text) and right page (image)
+            
+            // Front cover
+            pagesHtml += `
+                <div class="page">
+                    <div class="book-cover">
+                        <div>📖</div>
+                        <div>${storyData.title}</div>
+                        <div class="subtitle">Click to turn pages</div>
+                    </div>
+                </div>
+            `;
+            
+            // Story pages - each story page gets two physical pages (text on left, image on right)
             for (let i = 0; i < storyData.pages.length; i++) {
                 const page = storyData.pages[i];
-                const spreadIndex = i;
                 
-                // Left page (text)
+                // Text page (left side)
                 pagesHtml += `
-                    <div class="page page-left" id="page-left-${i}" data-spread="${spreadIndex}" style="z-index: ${100 - i};">
+                    <div class="page text-page">
                         <div class="page-content">
                             <div class="page-text">${page.text}</div>
                             <div class="page-number">${page.pageNumber}</div>
@@ -606,9 +616,9 @@
                     </div>
                 `;
                 
-                // Right page (image)
+                // Image page (right side)
                 pagesHtml += `
-                    <div class="page page-right" id="page-right-${i}" data-spread="${spreadIndex}" style="z-index: ${100 - i};">
+                    <div class="page image-page">
                         <div class="page-content">
                             <div class="page-image">
                                 <img src="${page.imageUrl}" alt="Illustration for page ${page.pageNumber}" loading="lazy">
@@ -617,91 +627,76 @@
                     </div>
                 `;
             }
-
-            bookPages.innerHTML = pagesHtml;
-        }
-
-        function openBook() {
-            if (!bookOpened) {
-                document.querySelector('.book-cover').classList.add('opened');
-                document.querySelector('.book-pages').classList.add('active');
-                setTimeout(() => {
-                    showSpread(0);
-                }, 400);
-                bookOpened = true;
-                updateNavigation();
-            }
-        }
-
-        function closeBook() {
-            // Flip all pages back
-            for (let i = 0; i < storyData.pages.length; i++) {
-                const leftPage = document.getElementById(`page-left-${i}`);
-                const rightPage = document.getElementById(`page-right-${i}`);
-                leftPage.classList.remove('flipped');
-                rightPage.classList.remove('flipped');
+            
+            // Back cover (if odd number of total pages, add a blank page first)
+            const totalPages = 1 + (storyData.pages.length * 2);
+            if (totalPages % 2 === 0) {
+                pagesHtml += `<div class="page"></div>`;
             }
             
-            setTimeout(() => {
-                document.querySelector('.book-cover').classList.remove('opened');
-                document.querySelector('.book-pages').classList.remove('active');
-                bookOpened = false;
-                updateNavigation();
-            }, 800);
-        }
-
-        function showSpread(spreadIndex) {
-            currentSpread = spreadIndex;
+            pagesHtml += `
+                <div class="page">
+                    <div class="back-cover">
+                        <div>📚</div>
+                        <div>The End</div>
+                        <div style="font-size: 0.6em; margin-top: 20px;">Hope you enjoyed the story!</div>
+                    </div>
+                </div>
+            `;
             
-            // Flip pages to show the correct spread
-            for (let i = 0; i < storyData.pages.length; i++) {
-                const leftPage = document.getElementById(`page-left-${i}`);
-                const rightPage = document.getElementById(`page-right-${i}`);
-                
-                if (i < spreadIndex) {
-                    // Pages before current spread should be flipped
-                    leftPage.classList.add('flipped');
-                    rightPage.classList.add('flipped');
-                } else {
-                    // Pages at and after current spread should not be flipped
-                    leftPage.classList.remove('flipped');
-                    rightPage.classList.remove('flipped');
+            flipbookEl.innerHTML = pagesHtml;
+            
+            // Initialize turn.js
+            $("#flipbook").turn({
+                width: 800,
+                height: 600,
+                autoCenter: true,
+                display: 'double',
+                acceleration: true,
+                gradients: true,
+                elevation: 50,
+                when: {
+                    turned: function(event, page, view) {
+                        updateNavigation();
+                    }
                 }
-            }
-            
+            });
+
+            flipbook = $("#flipbook").turn('page');
             updateNavigation();
         }
 
-        function nextSpread() {
-            if (currentSpread < storyData.pages.length - 1) {
-                showSpread(currentSpread + 1);
+        function nextPage() {
+            if (flipbook) {
+                $("#flipbook").turn('next');
             }
         }
 
-        function previousSpread() {
-            if (currentSpread > 0) {
-                showSpread(currentSpread - 1);
+        function previousPage() {
+            if (flipbook) {
+                $("#flipbook").turn('previous');
+            }
+        }
+
+        function goToFirstPage() {
+            if (flipbook) {
+                $("#flipbook").turn('page', 1);
             }
         }
 
         function updateNavigation() {
+            if (!flipbook) return;
+            
+            const currentPage = $("#flipbook").turn('page');
+            const totalPages = $("#flipbook").turn('pages');
+            
             const prevBtn = document.getElementById('prevBtn');
             const nextBtn = document.getElementById('nextBtn');
-            const closeBtn = document.getElementById('closeBtn');
-
-            if (!bookOpened) {
-                prevBtn.style.display = 'none';
-                nextBtn.style.display = 'none';
-                closeBtn.style.display = 'none';
-                return;
-            }
-
-            prevBtn.style.display = 'flex';
-            nextBtn.style.display = 'flex';
-            closeBtn.style.display = 'flex';
-
-            prevBtn.disabled = currentSpread <= 0;
-            nextBtn.disabled = currentSpread >= storyData.pages.length - 1;
+            const firstBtn = document.getElementById('firstBtn');
+            
+            if (prevBtn) prevBtn.disabled = currentPage <= 1;
+            if (nextBtn) nextBtn.disabled = currentPage >= totalPages;
+            if (firstBtn) firstBtn.disabled = currentPage <= 1;
         }
 
         function showError(message) {
@@ -722,30 +717,20 @@
             document.getElementById('sideCharacters').value = '';
             document.getElementById('pages').value = '5';
             
-            // Reset book state
-            currentSpread = 0;
-            bookOpened = false;
+            // Reset flipbook
+            flipbook = null;
         }
 
         // Keyboard navigation
         document.addEventListener('keydown', (e) => {
-            if (bookOpened) {
+            if (flipbook) {
                 if (e.key === 'ArrowRight') {
-                    nextSpread();
+                    nextPage();
                 } else if (e.key === 'ArrowLeft') {
-                    previousSpread();
-                } else if (e.key === 'Escape') {
-                    closeBook();
+                    previousPage();
+                } else if (e.key === 'Home') {
+                    goToFirstPage();
                 }
-            }
-        });
-
-        // Add click handlers for page turning
-        document.addEventListener('click', (e) => {
-            if (bookOpened && e.target.closest('.page-right')) {
-                nextSpread();
-            } else if (bookOpened && e.target.closest('.page-left') && currentSpread > 0) {
-                previousSpread();
             }
         });
     </script>
