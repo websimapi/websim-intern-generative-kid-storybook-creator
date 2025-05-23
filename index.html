@@ -281,6 +281,29 @@
             margin: 15px 0;
         }
 
+        .retry-button {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 20px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 10px 5px;
+        }
+
+        .retry-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(245, 158, 11, 0.4);
+        }
+
+        .error-actions {
+            margin-top: 15px;
+            text-align: center;
+        }
+
         .story-title {
             text-align: center;
             color: #6366f1;
@@ -366,9 +389,16 @@
         <div id="loadingDiv" class="loading" style="display: none;">
             <div id="loadingText">🌟 Creating your magical story...</div>
             <div style="margin-top: 10px; font-size: 14px;" id="loadingSubtext">This may take a few moments while we generate text and illustrations!</div>
+            <div style="margin-top: 10px; font-size: 12px; color: #6b7280;" id="retryCount"></div>
         </div>
 
-        <div id="errorDiv" class="error" style="display: none;"></div>
+        <div id="errorDiv" class="error" style="display: none;">
+            <div id="errorMessage"></div>
+            <div class="error-actions">
+                <button class="retry-button" onclick="retryGeneration()">🔄 Try Again</button>
+                <button class="retry-button" onclick="resetForm()">🏠 Start Over</button>
+            </div>
+        </div>
 
         <div id="storybook" class="storybook"></div>
     </div>
@@ -385,6 +415,41 @@
 
         let currentPage = 0;
         let bookOpened = false;
+        let currentGenerationStep = null;
+        let generationRetryCount = 0;
+        const MAX_RETRIES = 3;
+
+        async function retryWithBackoff(fn, maxRetries = MAX_RETRIES, stepName = 'operation') {
+            let lastError;
+            
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                try {
+                    updateRetryCount(stepName, attempt, maxRetries);
+                    const result = await fn();
+                    return result;
+                } catch (error) {
+                    lastError = error;
+                    console.error(`Attempt ${attempt} failed for ${stepName}:`, error);
+                    
+                    if (attempt < maxRetries) {
+                        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000); 
+                        updateLoadingText(`⏳ Retrying ${stepName}... (attempt ${attempt + 1}/${maxRetries})`);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                    }
+                }
+            }
+            
+            throw new Error(`${stepName} failed after ${maxRetries} attempts: ${lastError.message}`);
+        }
+
+        function updateRetryCount(stepName, attempt, maxRetries) {
+            const retryElement = document.getElementById('retryCount');
+            if (attempt > 1) {
+                retryElement.textContent = `Retry ${attempt - 1}/${maxRetries - 1} for ${stepName}`;
+            } else {
+                retryElement.textContent = '';
+            }
+        }
 
         async function generateStory() {
             const pages = parseInt(document.getElementById('pages').value);
@@ -393,7 +458,7 @@
             const sideCharacters = document.getElementById('sideCharacters').value.trim();
 
             if (!topic) {
-                showError('Please tell us what your story should be about!');
+                showError('Please tell us what your story should be about!', false);
                 return;
             }
 
@@ -406,32 +471,54 @@
                 characterDescriptions: {}
             };
 
-            try {
-                document.getElementById('storyForm').style.display = 'none';
-                document.getElementById('loadingDiv').style.display = 'block';
-                document.getElementById('errorDiv').style.display = 'none';
+            generationRetryCount = 0;
+            currentGenerationStep = 'full_generation';
 
+            try {
+                await executeGeneration();
+            } catch (error) {
+                console.error('Story generation failed:', error);
+                showError(`Story creation failed: ${error.message}`, true);
+            }
+        }
+
+        async function executeGeneration() {
+            document.getElementById('storyForm').style.display = 'none';
+            document.getElementById('loadingDiv').style.display = 'block';
+            document.getElementById('errorDiv').style.display = 'none';
+
+            try {
                 updateLoadingText('🌟 Creating your story text...');
-                await generateStoryText();
+                await retryWithBackoff(generateStoryText, MAX_RETRIES, 'story text generation');
                 
                 updateLoadingText('🎨 Designing character appearances...');
-                await generateCharacterDescriptions();
+                await retryWithBackoff(generateCharacterDescriptions, MAX_RETRIES, 'character design');
                 
                 updateLoadingText('📸 Creating character reference images...');
-                await generateCharacterImages();
+                await retryWithBackoff(generateCharacterImages, MAX_RETRIES, 'character images');
                 
                 updateLoadingText('🔍 Analyzing character appearances...');
-                await analyzeCharacterImages();
+                await retryWithBackoff(analyzeCharacterImages, MAX_RETRIES, 'character analysis');
                 
                 updateLoadingText('🖼️ Creating story illustrations...');
-                await generateStoryImages();
+                await retryWithBackoff(generateStoryImages, MAX_RETRIES, 'story illustrations');
 
                 displayStorybook();
 
             } catch (error) {
-                console.error('Error generating story:', error);
-                showError('Oops! Something went wrong while creating your story. Please try again!');
-                resetForm();
+                throw error;
+            }
+        }
+
+        async function retryGeneration() {
+            generationRetryCount++;
+            updateLoadingText(`🔄 Retrying story creation (attempt ${generationRetryCount + 1})...`);
+            
+            try {
+                await executeGeneration();
+            } catch (error) {
+                console.error('Retry failed:', error);
+                showError(`Retry failed: ${error.message}`, true);
             }
         }
 
@@ -468,38 +555,52 @@
               ]
             }`;
 
-            const completion = await websim.chat.completions.create({
-                messages: [
-                    {
-                        role: "system",
-                        content: systemPrompt
-                    },
-                    {
-                        role: "user",
-                        content: "Please create my story!"
-                    }
-                ],
-                json: true
-            });
+            try {
+                const completion = await websim.chat.completions.create({
+                    messages: [
+                        {
+                            role: "system",
+                            content: systemPrompt
+                        },
+                        {
+                            role: "user",
+                            content: "Please create my story!"
+                        }
+                    ],
+                    json: true
+                });
 
-            const result = JSON.parse(completion.content);
-            storyData.title = result.title;
-            storyData.pages = result.pages;
+                const result = JSON.parse(completion.content);
+                
+                if (!result.title || !result.pages || !Array.isArray(result.pages)) {
+                    throw new Error('Invalid story format received from AI');
+                }
+                
+                storyData.title = result.title;
+                storyData.pages = result.pages;
+                
+            } catch (error) {
+                if (error.message.includes('JSON')) {
+                    throw new Error('Failed to parse story content');
+                }
+                throw new Error(`Story text generation failed: ${error.message}`);
+            }
         }
 
         async function generateCharacterDescriptions() {
-            let allCharacters = [];
-            
-            if (storyData.mainCharacters) {
-                allCharacters.push(...storyData.mainCharacters.split(',').map(c => c.trim()));
-            }
-            if (storyData.sideCharacters) {
-                allCharacters.push(...storyData.sideCharacters.split(',').map(c => c.trim()));
-            }
+            try {
+                let allCharacters = [];
+                
+                if (storyData.mainCharacters) {
+                    allCharacters.push(...storyData.mainCharacters.split(',').map(c => c.trim()));
+                }
+                if (storyData.sideCharacters) {
+                    allCharacters.push(...storyData.sideCharacters.split(',').map(c => c.trim()));
+                }
 
-            const storyText = storyData.pages.map(p => p.text).join(' ');
-            
-            const characterExtractionPrompt = `Extract all character names from this children's story text and the provided character lists. Return them as a simple comma-separated list of character names only.
+                const storyText = storyData.pages.map(p => p.text).join(' ');
+                
+                const characterExtractionPrompt = `Extract all character names from this children's story text and the provided character lists. Return them as a simple comma-separated list of character names only.
 
 Story text: ${storyText}
 Main characters provided: ${storyData.mainCharacters || 'none'}
@@ -507,22 +608,22 @@ Side characters provided: ${storyData.sideCharacters || 'none'}
 
 Return format: Character1, Character2, Character3`;
 
-            const extractionCompletion = await websim.chat.completions.create({
-                messages: [
-                    {
-                        role: "user",
-                        content: characterExtractionPrompt
-                    }
-                ]
-            });
+                const extractionCompletion = await websim.chat.completions.create({
+                    messages: [
+                        {
+                            role: "user",
+                            content: characterExtractionPrompt
+                        }
+                    ]
+                });
 
-            const extractedCharacters = extractionCompletion.content.split(',').map(c => c.trim()).filter(c => c.length > 0);
-            allCharacters.push(...extractedCharacters);
-            
-            allCharacters = [...new Set(allCharacters)].filter(char => char && char.length > 0);
+                const extractedCharacters = extractionCompletion.content.split(',').map(c => c.trim()).filter(c => c.length > 0);
+                allCharacters.push(...extractedCharacters);
+                
+                allCharacters = [...new Set(allCharacters)].filter(char => char && char.length > 0);
 
-            for (const character of allCharacters) {
-                const descriptionPrompt = `Create a detailed visual description for a children's book character named "${character}" for the story about: ${storyData.topic}
+                for (const character of allCharacters) {
+                    const descriptionPrompt = `Create a detailed visual description for a children's book character named "${character}" for the story about: ${storyData.topic}
 
 The description should be detailed enough to generate consistent artwork. Include:
 - Physical appearance (size, shape, colors)
@@ -534,38 +635,52 @@ Keep it appropriate for children aged 4-8. Make it colorful and appealing.
 
 Respond with just the visual description, no other text.`;
 
-                const descriptionCompletion = await websim.chat.completions.create({
-                    messages: [
-                        {
-                            role: "user",
-                            content: descriptionPrompt
-                        }
-                    ]
-                });
+                    const descriptionCompletion = await websim.chat.completions.create({
+                        messages: [
+                            {
+                                role: "user",
+                                content: descriptionPrompt
+                            }
+                        ]
+                    });
 
-                if (!storyData.characterDescriptions[character]) {
-                    storyData.characterDescriptions[character] = {};
+                    if (!storyData.characterDescriptions[character]) {
+                        storyData.characterDescriptions[character] = {};
+                    }
+                    storyData.characterDescriptions[character].initialDescription = descriptionCompletion.content;
                 }
-                storyData.characterDescriptions[character].initialDescription = descriptionCompletion.content;
+                
+            } catch (error) {
+                throw new Error(`Character design failed: ${error.message}`);
             }
         }
 
         async function generateCharacterImages() {
-            for (const [characterName, characterData] of Object.entries(storyData.characterDescriptions)) {
-                const imagePrompt = `Children's book character illustration: ${characterData.initialDescription}. Simple, clean background. Child-friendly cartoon style, bright and vibrant colors.`;
+            try {
+                for (const [characterName, characterData] of Object.entries(storyData.characterDescriptions)) {
+                    const imagePrompt = `Children's book character illustration: ${characterData.initialDescription}. Simple, clean background. Child-friendly cartoon style, bright and vibrant colors.`;
 
-                const imageResult = await websim.imageGen({
-                    prompt: imagePrompt,
-                    aspect_ratio: "1:1"
-                });
+                    const imageResult = await websim.imageGen({
+                        prompt: imagePrompt,
+                        aspect_ratio: "1:1"
+                    });
 
-                characterData.referenceImageUrl = imageResult.url;
+                    if (!imageResult || !imageResult.url) {
+                        throw new Error(`Failed to generate image for character: ${characterName}`);
+                    }
+
+                    characterData.referenceImageUrl = imageResult.url;
+                }
+                
+            } catch (error) {
+                throw new Error(`Character image generation failed: ${error.message}`);
             }
         }
 
         async function analyzeCharacterImages() {
-            for (const [characterName, characterData] of Object.entries(storyData.characterDescriptions)) {
-                const analysisPrompt = `Analyze this character image and provide a detailed visual description that can be used to maintain consistency in future illustrations. Focus on:
+            try {
+                for (const [characterName, characterData] of Object.entries(storyData.characterDescriptions)) {
+                    const analysisPrompt = `Analyze this character image and provide a detailed visual description that can be used to maintain consistency in future illustrations. Focus on:
 
 - Exact colors used (be specific about shades)
 - Body shape and proportions
@@ -578,49 +693,62 @@ Be very detailed and specific so this description can be used to recreate the ch
 
 Respond with just the detailed visual analysis, no other text.`;
 
-                const analysisCompletion = await websim.chat.completions.create({
-                    messages: [
-                        {
-                            role: "user",
-                            content: [
-                                {
-                                    type: "text",
-                                    text: analysisPrompt
-                                },
-                                {
-                                    type: "image_url",
-                                    image_url: { url: characterData.referenceImageUrl }
-                                }
-                            ]
-                        }
-                    ]
-                });
+                    const analysisCompletion = await websim.chat.completions.create({
+                        messages: [
+                            {
+                                role: "user",
+                                content: [
+                                    {
+                                        type: "text",
+                                        text: analysisPrompt
+                                    },
+                                    {
+                                        type: "image_url",
+                                        image_url: { url: characterData.referenceImageUrl }
+                                    }
+                                ]
+                            }
+                        ]
+                    });
 
-                characterData.visualAnalysis = analysisCompletion.content;
+                    characterData.visualAnalysis = analysisCompletion.content;
+                }
+                
+            } catch (error) {
+                throw new Error(`Character analysis failed: ${error.message}`);
             }
         }
 
         async function generateStoryImages() {
-            for (let i = 0; i < storyData.pages.length; i++) {
-                const page = storyData.pages[i];
-                
-                let imagePrompt = `Children's book illustration: ${page.text}`;
-                
-                const pageText = page.text.toLowerCase();
-                for (const [characterName, characterData] of Object.entries(storyData.characterDescriptions)) {
-                    if (pageText.includes(characterName.toLowerCase())) {
-                        imagePrompt += ` Character "${characterName}" should look exactly like this: ${characterData.visualAnalysis}`;
+            try {
+                for (let i = 0; i < storyData.pages.length; i++) {
+                    const page = storyData.pages[i];
+                    
+                    let imagePrompt = `Children's book illustration: ${page.text}`;
+                    
+                    const pageText = page.text.toLowerCase();
+                    for (const [characterName, characterData] of Object.entries(storyData.characterDescriptions)) {
+                        if (pageText.includes(characterName.toLowerCase())) {
+                            imagePrompt += ` Character "${characterName}" should look exactly like this: ${characterData.visualAnalysis}`;
+                        }
                     }
+                    
+                    imagePrompt += `. Scene should match the story context. Colorful, cheerful, cartoon style suitable for children aged 4-8, bright and vibrant colors, clear composition.`;
+
+                    const imageResult = await websim.imageGen({
+                        prompt: imagePrompt,
+                        aspect_ratio: "4:3"
+                    });
+
+                    if (!imageResult || !imageResult.url) {
+                        throw new Error(`Failed to generate illustration for page ${page.pageNumber}`);
+                    }
+
+                    page.imageUrl = imageResult.url;
                 }
                 
-                imagePrompt += `. Scene should match the story context. Colorful, cheerful, cartoon style suitable for children aged 4-8, bright and vibrant colors, clear composition.`;
-
-                const imageResult = await websim.imageGen({
-                    prompt: imagePrompt,
-                    aspect_ratio: "4:3"
-                });
-
-                page.imageUrl = imageResult.url;
+            } catch (error) {
+                throw new Error(`Story illustration generation failed: ${error.message}`);
             }
         }
 
@@ -763,10 +891,21 @@ Respond with just the detailed visual analysis, no other text.`;
             nextBtn.disabled = currentPage >= storyData.pages.length - 1;
         }
 
-        function showError(message) {
+        function showError(message, showRetry = false) {
             const errorDiv = document.getElementById('errorDiv');
-            errorDiv.textContent = message;
+            const errorMessage = document.getElementById('errorMessage');
+            const retryButton = errorDiv.querySelector('.retry-button');
+            
+            errorMessage.textContent = message;
             errorDiv.style.display = 'block';
+            document.getElementById('loadingDiv').style.display = 'none';
+            
+            const actionButtons = errorDiv.querySelector('.error-actions');
+            if (showRetry) {
+                actionButtons.style.display = 'block';
+            } else {
+                actionButtons.style.display = 'none';
+            }
         }
 
         function resetForm() {
@@ -775,16 +914,21 @@ Respond with just the detailed visual analysis, no other text.`;
             document.getElementById('errorDiv').style.display = 'none';
             document.getElementById('storybook').innerHTML = '';
             
-            document.getElementById('storyTopic').value = '';
-            document.getElementById('mainCharacters').value = '';
-            document.getElementById('sideCharacters').value = '';
-            document.getElementById('pages').value = '5';
+            if (currentGenerationStep === null) {
+                document.getElementById('storyTopic').value = '';
+                document.getElementById('mainCharacters').value = '';
+                document.getElementById('sideCharacters').value = '';
+                document.getElementById('pages').value = '5';
+            }
             
             currentPage = 0;
             bookOpened = false;
+            currentGenerationStep = null;
+            generationRetryCount = 0;
             
             document.getElementById('loadingText').textContent = '🌟 Creating your magical story...';
             document.getElementById('loadingSubtext').textContent = 'This may take a few moments while we generate text and illustrations!';
+            document.getElementById('retryCount').textContent = '';
         }
 
         document.addEventListener('keydown', (e) => {
